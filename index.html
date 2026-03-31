@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Aurora Signal Visualizer</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;700&family=Cormorant+Garamond:wght@500;700&display=swap');
+
+    :root {
+      --bg: #12081b;
+      --bg-panel: rgba(255,255,255,0.05);
+      --bg-panel-strong: rgba(255,255,255,0.09);
+      --line: rgba(214, 199, 255, 0.28);
+      --text: rgba(244, 238, 255, 0.92);
+      --text-soft: rgba(244, 238, 255, 0.62);
+      --text-faint: rgba(244, 238, 255, 0.18);
+      --shadow: 0 14px 40px rgba(0,0,0,0.28);
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    body {
+      background:
+        radial-gradient(circle at top left, rgba(111, 76, 255, 0.16), transparent 32%),
+        radial-gradient(circle at bottom right, rgba(0, 229, 255, 0.10), transparent 28%),
+        var(--bg);
+      overflow: hidden;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    #title-block {
+      position: fixed;
+      top: 24px;
+      left: 24px;
+      z-index: 4;
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      border-radius: var(--radius);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      min-width: min(420px, calc(100vw - 48px));
+    }
+
+    #title-block h1 {
+      margin: 0;
+      font-family: 'Cormorant Garamond', serif;
+      font-weight: 700;
+      font-size: clamp(28px, 4.2vw, 56px);
+      letter-spacing: 3px;
+      line-height: 0.95;
+      color: rgba(255,255,255,0.92);
+      text-transform: uppercase;
+    }
+
+    #mode-name {
+      margin-top: 10px;
+      font-size: 12px;
+      letter-spacing: 4px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+    }
+
+    #note-name {
+      margin-top: 8px;
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 54px;
+      line-height: 1;
+      color: rgba(255,255,255,0.28);
+      min-height: 58px;
+    }
+
+    #hud-row {
+      margin-top: 8px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .hud-pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      background: rgba(255,255,255,0.03);
+    }
+
+    #controls {
+      position: fixed;
+      right: 24px;
+      top: 24px;
+      z-index: 4;
+      display: grid;
+      gap: 10px;
+      width: min(230px, calc(100vw - 48px));
+    }
+
+    .mode-btn,
+    #start-btn {
+      appearance: none;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.04);
+      color: var(--text);
+      padding: 12px 16px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+      backdrop-filter: blur(12px);
+      box-shadow: var(--shadow);
+      text-align: left;
+    }
+
+    .mode-btn:hover,
+    #start-btn:hover,
+    .mode-btn.active {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.10);
+      border-color: rgba(255,255,255,0.56);
+    }
+
+    #freq-sidebar {
+      position: fixed;
+      left: 24px;
+      bottom: 24px;
+      z-index: 4;
+      display: grid;
+      grid-template-columns: repeat(5, minmax(54px, 1fr));
+      gap: 12px;
+      width: min(420px, calc(100vw - 48px));
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03));
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+    }
+
+    .freq-band {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .freq-lbl {
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+      text-align: center;
+    }
+
+    .freq-track {
+      width: 100%;
+      height: 120px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.16);
+      background: rgba(255,255,255,0.04);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .freq-fill {
+      position: absolute;
+      left: 0;
+      bottom: 0;
+      width: 100%;
+      height: 0%;
+      border-radius: 999px;
+      box-shadow: 0 0 22px currentColor;
+    }
+
+    #status {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 4;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.05);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      font-size: 10px;
+      letter-spacing: 2px;
+      color: var(--text-soft);
+      text-transform: uppercase;
+    }
+
+    @media (max-width: 900px) {
+      #title-block,
+      #controls,
+      #freq-sidebar,
+      #status {
+        position: fixed;
+      }
+
+      #title-block {
+        top: 14px;
+        left: 14px;
+        min-width: calc(100vw - 28px);
+      }
+
+      #controls {
+        top: auto;
+        right: 14px;
+        left: 14px;
+        bottom: 184px;
+        width: auto;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      #start-btn {
+        grid-column: span 2;
+      }
+
+      #freq-sidebar {
+        left: 14px;
+        right: 14px;
+        width: auto;
+        bottom: 70px;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 8px;
+        padding: 12px;
+      }
+
+      .freq-track {
+        height: 84px;
+      }
+
+      #note-name {
+        font-size: 42px;
+      }
+
+      #status {
+        left: 14px;
+        right: 14px;
+        bottom: 14px;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+
+  <div id="title-block">
+    <h1>Aurora Signal</h1>
+    <div id="mode-name">LISSAJOUS</div>
+    <div id="note-name">IDLE</div>
+    <div id="hud-row">
+      <div class="hud-pill">Live mic reactive</div>
+      <div class="hud-pill">Pitch color mapping</div>
+      <div class="hud-pill">6 visual modes</div>
+    </div>
+  </div>
+
+  <div id="controls">
+    <button class="mode-btn active" data-mode="0">Lissajous</button>
+    <button class="mode-btn" data-mode="1">Mandala</button>
+    <button class="mode-btn" data-mode="2">Constellation</button>
+    <button class="mode-btn" data-mode="3">Interference</button>
+    <button class="mode-btn" data-mode="4">All Modes</button>
+    <button class="mode-btn" data-mode="5">Radial Wave</button>
+    <button id="start-btn">Activate Mic</button>
+  </div>
+
+  <div id="freq-sidebar">
+    <div class="freq-band">
+      <div class="freq-lbl">Bass</div>
+      <div class="freq-track"><div class="freq-fill" id="bar-bass" style="background:#3a86ff"></div></div>
+    </div>
+    <div class="freq-band">
+      <div class="freq-lbl">Low Mid</div>
+      <div class="freq-track"><div class="freq-fill" id="bar-lowmid" style="background:#00bbf9"></div></div>
+    </div>
+    <div class="freq-band">
+      <div class="freq-lbl">Mid</div>
+      <div class="freq-track"><div class="freq-fill" id="bar-mid" style="background:#00f5d4"></div></div>
+    </div>
+    <div class="freq-band">
+      <div class="freq-lbl">High Mid</div>
+      <div class="freq-track"><div class="freq-fill" id="bar-highmid" style="background:#b8f2e6"></div></div>
+    </div>
+    <div class="freq-band">
+      <div class="freq-lbl">Treble</div>
+      <div class="freq-track"><div class="freq-fill" id="bar-treble" style="background:#eff7f6"></div></div>
+    </div>
+  </div>
+
+  <div id="status">Microphone idle</div>
+
+  <script>
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+
+    const modeNameEl = document.getElementById('mode-name');
+    const noteNameEl = document.getElementById('note-name');
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('start-btn');
+    const modeButtons = [...document.querySelectorAll('.mode-btn')];
+
+    const barEls = {
+      bass: document.getElementById('bar-bass'),
+      lowmid: document.getElementById('bar-lowmid'),
+      mid: document.getElementById('bar-mid'),
+      highmid: document.getElementById('bar-highmid'),
+      treble: document.getElementById('bar-treble'),
+    };
+
+    const MODE_NAMES = [
+      'LISSAJOUS',
+      'MANDALA',
+      'CONSTELLATION',
+      'INTERFERENCE',
+      'ALL MODES',
+      'RADIAL WAVE',
+    ];
+
+    let W = 0;
+    let H = 0;
+    let mode = 0;
+    let running = false;
+
+    let audioCtx = null;
+    let analyser = null;
+    let source = null;
+    let streamRef = null;
+    let freqData = null;
+    let timeData = null;
+    let sr = 48000;
+
+    let sRMS = 0;
+    let sBass = 0;
+    let sLowMid = 0;
+    let sMid = 0;
+    let sHighMid = 0;
+    let sTreble = 0;
+    let sCentroid = 0;
+    let sPeakFreq = 220;
+    let sHue = 200;
+
+    const LISS_HISTORY = 220;
+    const lissTrail = [];
+    const particles = [];
+
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width = Math.floor(W * dpr);
+      canvas.height = Math.floor(H * dpr);
+      canvas.style.width = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function clamp(v, lo, hi) {
+      return Math.max(lo, Math.min(hi, v));
+    }
+
+    function hsl(h, s = 100, l = 50, a = 1) {
+      return `hsla(${((h % 360) + 360) % 360}, ${s}%, ${l}%, ${a})`;
+    }
+
+    function freqToNote(freq) {
+      if (!freq || !isFinite(freq) || freq <= 0) return 'IDLE';
+      const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const midi = Math.round(69 + 12 * Math.log2(freq / 440));
+      const name = notes[(midi + 1200) % 12];
+      const octave = Math.floor(midi / 12) - 1;
+      return `${name}${octave}`;
+    }
+
+    function bandEnergy(data, sampleRate, lowHz, highHz) {
+      if (!data || !analyser) return 0;
+      const nyquist = sampleRate / 2;
+      const start = clamp(Math.floor((lowHz / nyquist) * data.length), 0, data.length - 1);
+      const end = clamp(Math.ceil((highHz / nyquist) * data.length), start + 1, data.length);
+      let sum = 0;
+      for (let i = start; i < end; i++) sum += data[i] / 255;
+      return sum / Math.max(1, end - start);
+    }
+
+    function computeRMS(data) {
+      if (!data) return 0;
+      let sumSq = 0;
+      for (let i = 0; i < data.length; i++) {
+        const n = (data[i] - 128) / 128;
+        sumSq += n * n;
+      }
+      return Math.sqrt(sumSq / data.length);
+    }
+
+    function spectralCentroid(data, sampleRate) {
+      if (!data) return 0;
+      let weighted = 0;
+      let total = 0;
+      const nyquist = sampleRate / 2;
+      for (let i = 0; i < data.length; i++) {
+        const amp = data[i] / 255;
+        const freq = (i / data.length) * nyquist;
+        weighted += freq * amp;
+        total += amp;
+      }
+      return total > 0 ? weighted / total : 0;
+    }
+
+    function peakFrequency(data, sampleRate) {
+      if (!data) return 0;
+      let peakIndex = 0;
+      let peakValue = -1;
+      for (let i = 1; i < data.length; i++) {
+        if (data[i] > peakValue) {
+          peakValue = data[i];
+          peakIndex = i;
+        }
+      }
+      return (peakIndex / data.length) * (sampleRate / 2);
+    }
+
+    function updateBars() {
+      const values = {
+        bass: clamp(sBass, 0, 1),
+        lowmid: clamp(sLowMid, 0, 1),
+        mid: clamp(sMid, 0, 1),
+        highmid: clamp(sHighMid, 0, 1),
+        treble: clamp(sTreble, 0, 1),
+      };
+
+      for (const [key, val] of Object.entries(values)) {
+        barEls[key].style.height = `${val * 100}%`;
+      }
+    }
+
+    function newParticle() {
+      const maxR = Math.min(W, H) * 0.38;
+      return {
+        angle: Math.random() * Math.PI * 2,
+        phase: Math.random() * Math.PI * 2,
+        orbitR: Math.random() * maxR + 20,
+        orbitSpeed: (Math.random() - 0.5) * 0.001,
+        size: Math.random() * 5 + 2,
+        jitter: Math.random() * 0.35,
+      };
+    }
+
+    function resetParticles() {
+      particles.length = 0;
+      for (let i = 0; i < 60; i++) particles.push(newParticle());
+    }
+
+    function drawLissajous(x0, y0, w, h, alpha = 1, t = 0) {
+      const radius = Math.min(w, h) * 0.28;
+      const freqRatioA = 4 + sBass * 4;
+      const freqRatioB = 5 + sHighMid * 3;
+      const phaseShift = t * 0.2 + sMid * Math.PI * 2;
+      const pointCount = 760;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+
+      for (let i = 0; i <= pointCount; i++) {
+        const a = (i / pointCount) * Math.PI * 2;
+        const x = x0 + Math.sin(a * freqRatioA + phaseShift) * radius * (0.75 + sLowMid * 0.65);
+        const y = y0 + Math.sin(a * freqRatioB) * radius * (0.75 + sTreble * 0.65);
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+
+      ctx.strokeStyle = hsl(sHue, 88, 68, 0.52);
+      ctx.lineWidth = 1.3 + sRMS * 2.8;
+      ctx.shadowBlur = 18 + sRMS * 36;
+      ctx.shadowColor = hsl(sHue, 100, 74, 0.8);
+      ctx.stroke();
+      ctx.shadowBlur = 0;
+
+      const px = x0 + Math.sin(t * freqRatioA + phaseShift) * radius * (0.75 + sLowMid * 0.65);
+      const py = y0 + Math.sin(t * freqRatioB) * radius * (0.75 + sTreble * 0.65);
+      lissTrail.push({ x: px, y: py });
+      if (lissTrail.length > LISS_HISTORY) lissTrail.shift();
+
+      for (let i = 0; i < lissTrail.length; i++) {
+        const p = lissTrail[i];
+        const fade = i / lissTrail.length;
+        ctx.beginPath();
+        ctx.fillStyle = hsl(sHue + 60 * fade, 95, 72, fade * 0.22 * alpha);
+        ctx.arc(p.x, p.y, 0.8 + fade * 1.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.fillStyle = hsl(sHue + 14, 100, 86, alpha);
+      ctx.shadowBlur = 14 + sRMS * 26;
+      ctx.shadowColor = hsl(sHue, 100, 84, 0.95);
+      ctx.arc(px, py, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    function drawMandala(x0, y0, w, h, alpha = 1, t = 0) {
+      const petals = 6;
+      const rotSpeed = 0.01;
+      const ringBands = [sBass, sLowMid, sMid, sHighMid, sTreble];
+
+      ctx.save();
+      ctx.translate(x0, y0);
+      ctx.rotate(t * rotSpeed);
+      ctx.globalAlpha = alpha;
+
+      for (let ring = 0; ring < 5; ring++) {
+        const ringR = Math.min(w, h) * (0.07 + ring * 0.055);
+        const bandVal = ringBands[ring % ringBands.length];
+        const petalLen = ringR * (0.4 + bandVal * 0.4);
+        const petalW = ringR * (0.5 + sMid * 0.5);
+
+        for (let i = 0; i < petals; i++) {
+          const a = (i / petals) * Math.PI * 2;
+          ctx.save();
+          ctx.rotate(a + t * 0.015 * (ring + 1));
+          ctx.beginPath();
+          ctx.moveTo(0, 0);
+          ctx.bezierCurveTo(petalW, -petalLen * 0.25, petalW, -petalLen * 0.75, 0, -petalLen);
+          ctx.bezierCurveTo(-petalW, -petalLen * 0.75, -petalW, -petalLen * 0.25, 0, 0);
+          ctx.closePath();
+          ctx.fillStyle = hsl(sHue + ring * 10 + i * 6, 84, 58 + ring * 4, 0.09 + bandVal * 0.26);
+          ctx.strokeStyle = hsl(sHue + ring * 14, 94, 74, 0.22 + bandVal * 0.2);
+          ctx.lineWidth = 1.2 + bandVal * 2;
+          ctx.fill();
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      ctx.restore();
+    }
+
+    function drawConstellation(x0, y0, w, h, alpha = 1, t = 0) {
+      const connectDist = 20 + sBass * 20;
+      const speed = 0.5 + sMid * 3;
+      const spread = 0.8 + sRMS * 0.5;
+      const points = [];
+
+      for (const p of particles) {
+        p.angle += p.orbitSpeed * speed;
+        const r = p.orbitR * spread;
+        const x = x0 + Math.cos(p.angle + p.phase) * r + Math.sin(t * 0.45 + p.phase) * p.jitter * 10;
+        const y = y0 + Math.sin(p.angle - p.phase) * r + Math.cos(t * 0.4 + p.phase) * p.jitter * 10;
+        points.push({ x, y, size: p.size + sRMS * 1.1 });
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      for (let i = 0; i < points.length; i++) {
+        const a = points[i];
+        for (let j = i + 1; j < points.length; j++) {
+          const b = points[j];
+          const d = Math.hypot(a.x - b.x, a.y - b.y);
+          if (d < connectDist) {
+            const op = (1 - d / connectDist) * 0.26;
+            ctx.beginPath();
+            ctx.strokeStyle = hsl(sHue + 25, 82, 72, op);
+            ctx.lineWidth = 0.9;
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+      }
+
+      for (const p of points) {
+        ctx.beginPath();
+        ctx.fillStyle = hsl(sHue + 8, 92, 80, 0.88);
+        ctx.shadowBlur = 8 + sRMS * 12;
+        ctx.shadowColor = hsl(sHue + 12, 100, 82, 0.52);
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    function drawInterference(x0, y0, w, h, alpha = 1, t = 0) {
+      const res = 16;
+      const maxR = Math.min(w, h);
+      const waveFreq = 1 + sBass * 1;
+      const distortion = sMid * 0.1;
+      const s1x = x0 - maxR * 0.25 * (1 + sBass * 0.5);
+      const s1y = y0 + Math.sin(t * 0.3) * maxR * 0.1;
+      const s2x = x0 + maxR * 0.25 * (1 + sHighMid * 0.5);
+      const s2y = y0 - Math.sin(t * 0.3) * maxR * 0.1;
+
+      for (let y = 0; y < h; y += res) {
+        for (let x = 0; x < w; x += res) {
+          const d1 = Math.hypot(x - s1x, y - s1y);
+          const d2 = Math.hypot(x - s2x, y - s2y);
+          const wave = Math.sin(d1 * 0.02 * waveFreq + distortion * d2 * 0.002 - t * 1.8)
+                     + Math.sin(d2 * 0.02 * waveFreq + distortion * d1 * 0.002 - t * 1.8);
+          const norm = (wave + 2) / 4;
+          const light = 10 + norm * 38 + sRMS * 12;
+          ctx.fillStyle = hsl(sHue + norm * 38, 82, light, alpha * 0.38);
+          ctx.fillRect(x, y, res, res);
+        }
+      }
+    }
+
+    function drawRadialWave(x0, y0, w, h, alpha = 1) {
+      if (!timeData) return;
+      const baseR = Math.min(w, h) * 0.22;
+      const segments = 256;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      ctx.beginPath();
+      for (let i = 0; i <= segments; i++) {
+        const angle = (i / segments) * Math.PI * 2;
+        const idx = Math.floor((i / segments) * timeData.length);
+        const sample = (timeData[idx] - 128) / 128;
+        const r = baseR + sample * baseR * 0.55 * (1 + sRMS * 2.6);
+        const px = x0 + Math.cos(angle) * r;
+        const py = y0 + Math.sin(angle) * r;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = hsl(sHue, 90, 70, 0.82);
+      ctx.lineWidth = 1.5 + sRMS * 5;
+      ctx.shadowBlur = 14 + sRMS * 20;
+      ctx.shadowColor = hsl(sHue, 100, 78, 0.85);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.strokeStyle = hsl(sHue + 24, 70, 84, 0.25);
+      ctx.lineWidth = 1;
+      ctx.arc(x0, y0, baseR * (1 + sBass * 0.35), 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+
+    modeButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        mode = Number(btn.dataset.mode);
+        modeNameEl.textContent = MODE_NAMES[mode];
+        modeButtons.forEach(b => b.classList.toggle('active', b === btn));
+      });
+    });
+
+    startBtn.addEventListener('click', async () => {
+      if (running) {
+        running = false;
+        if (streamRef) {
+          streamRef.getTracks().forEach(track => track.stop());
+          streamRef = null;
+        }
+        if (source) {
+          try { source.disconnect(); } catch {}
+          source = null;
+        }
+        if (audioCtx) {
+          try { await audioCtx.close(); } catch {}
+          audioCtx = null;
+        }
+        analyser = null;
+        freqData = null;
+        timeData = null;
+        startBtn.textContent = 'Activate Mic';
+        statusEl.textContent = 'Microphone idle';
+        noteNameEl.textContent = 'IDLE';
+        return;
+      }
+
+      try {
+        streamRef = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          }
+        });
+
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        await audioCtx.resume();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.4;
+        source = audioCtx.createMediaStreamSource(streamRef);
+        source.connect(analyser);
+
+        sr = audioCtx.sampleRate;
+        freqData = new Uint8Array(analyser.frequencyBinCount);
+        timeData = new Uint8Array(analyser.fftSize);
+
+        running = true;
+        startBtn.textContent = 'Deactivate Mic';
+        statusEl.textContent = 'Microphone live';
+      } catch (err) {
+        console.error(err);
+        statusEl.textContent = 'Mic access denied';
+      }
+    });
+
+    function render(now = 0) {
+      const t = now * 0.001;
+      ctx.fillStyle = `rgba(18,8,27,${0.11 + (1 - sRMS) * 0.08})`;
+      ctx.fillRect(0, 0, W, H);
+
+      if (running && analyser) {
+        analyser.getByteFrequencyData(freqData);
+        analyser.getByteTimeDomainData(timeData);
+
+        const rms = computeRMS(timeData);
+        const bass = bandEnergy(freqData, sr, 20, 200);
+        const lowmid = bandEnergy(freqData, sr, 200, 600);
+        const mid = bandEnergy(freqData, sr, 600, 2000);
+        const highmid = bandEnergy(freqData, sr, 2000, 5000);
+        const treble = bandEnergy(freqData, sr, 5000, 12000);
+        const centroid = spectralCentroid(freqData, sr);
+        const peakFreq = peakFrequency(freqData, sr);
+
+        const sm = 0.08;
+        sRMS = sRMS * (1 - sm) + rms * sm * 5;
+        sBass = sBass * (1 - sm) + bass * sm * 3;
+        sLowMid = sLowMid * (1 - sm) + lowmid * sm * 3;
+        sMid = sMid * (1 - sm) + mid * sm * 3;
+        sHighMid = sHighMid * (1 - sm) + highmid * sm * 3;
+        sTreble = sTreble * (1 - sm) + treble * sm * 3;
+        sCentroid = sCentroid * 0.88 + centroid * 0.12;
+        sPeakFreq = sPeakFreq * 0.84 + peakFreq * 0.16;
+
+        const targetHue = (sPeakFreq / 800) * 80 + 160;
+        sHue = sHue * 0.82 + targetHue * 0.18;
+
+        noteNameEl.textContent = freqToNote(sPeakFreq);
+      } else {
+        sRMS *= 0.96;
+        sBass *= 0.95;
+        sLowMid *= 0.95;
+        sMid *= 0.95;
+        sHighMid *= 0.95;
+        sTreble *= 0.95;
+        sHue = (t * 8) % 360;
+      }
+
+      updateBars();
+
+      const cx = W * 0.5;
+      const cy = H * 0.55;
+
+      if (mode === 0) {
+        drawLissajous(cx, cy, W, H, 1, t);
+      } else if (mode === 1) {
+        drawMandala(cx, cy, W, H, 1, t);
+      } else if (mode === 2) {
+        drawConstellation(cx, cy, W, H, 1, t);
+      } else if (mode === 3) {
+        drawInterference(cx, cy, W, H, 1, t);
+      } else if (mode === 4) {
+        drawInterference(cx, cy, W, H, 0.24, t);
+        drawConstellation(cx, cy, W, H, 0.5, t);
+        drawMandala(cx, cy, W, H, 0.68, t);
+        drawLissajous(cx, cy, W, H, 0.85, t);
+        drawRadialWave(cx, cy, W, H, 0.65);
+      } else if (mode === 5) {
+        drawRadialWave(cx, cy, W, H, 1);
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    window.addEventListener('resize', () => {
+      resize();
+      resetParticles();
+    });
+
+    resize();
+    resetParticles();
+    modeNameEl.textContent = MODE_NAMES[mode];
+    requestAnimationFrame(render);
+  </script>
+</body>
+</html>
